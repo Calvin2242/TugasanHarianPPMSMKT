@@ -5,7 +5,7 @@ import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc
 
 const auth=getAuth(initializeApp(firebaseConfig)),db=getFirestore(auth.app);
 const DEF=[["A. Sebelum & semasa sesi",["Membuka kelas dan memastikan keadaan bersih serta selamat","Menyambut kehadiran murid","Membantu guru dalam aktiviti PdP"]],["B. Hidangan",["Menyediakan sarapan dan minuman mengikut menu","Menyediakan kudapan mengikut menu"]],["C. Pembersihan & penutup",["Membersihkan kelas","Membersihkan tandas","Memastikan suis elektrik ditutup"]]];
-let U=null,P={nama:"",kelas:"",sekolah:"Nama Sekolah"},T=[],R={},tab="dash",cur=today(),draft=null,un=[];
+let U=null,P={nama:"",sekolah:"Nama Sekolah",profileSet:0},T=[],R={},tab="dash",cur=today(),draft=null,un=[];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -18,7 +18,7 @@ const groups=()=>{const g={};T.forEach(t=>(g[t.section]=g[t.section]||[]).push(t
 // ---------- Auth ----------
 onAuthStateChanged(auth,u=>{un.forEach(f=>f());un=[];U=u;T=[];R={};draft=null;
  if(!u)return authView();
- un.push(onSnapshot(ud(),async s=>{if(!s.exists()||!s.data().seeded){const b=writeBatch(db);b.set(ud(),{...P,seeded:true},{merge:true});let o=0;DEF.forEach(([sec,l])=>l.forEach(x=>b.set(doc(collection(ud(),"tasks")),{section:sec,label:x,order:o++})));await b.commit()}else{P={...P,...s.data()};draw()}}));
+ un.push(onSnapshot(ud(),async s=>{if(!s.exists()||!s.data().seeded){const b=writeBatch(db);b.set(ud(),{...P,seeded:true,profileSet:0},{merge:true});let o=0;DEF.forEach(([sec,l])=>l.forEach(x=>b.set(doc(collection(ud(),"tasks")),{section:sec,label:x,order:o++})));await b.commit()}else if(s.data().profileSet===undefined){await setDoc(ud(),{profileSet:s.data().nama?1:0},{merge:true})}else{P={...P,...s.data()};draw()}}));
  un.push(onSnapshot(collection(ud(),"tasks"),s=>{T=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.section.localeCompare(b.section)||a.order-b.order);draw()}));
  un.push(onSnapshot(collection(ud(),"records"),s=>{R={};s.docs.forEach(d=>R[d.id]=d.data());draw()}));
 });
@@ -35,13 +35,13 @@ function authView(){
 const TABS=[["dash","Dashboard"],["form","Borang Harian"],["tasks","Senarai Tugasan"],["rep","Laporan PDF"]];
 function draw(){if(!U)return;if(tab==="form"&&draft&&$("#ck"))return; // jangan ganggu borang yang sedang diisi
  $("#app").innerHTML=`<header><img src="logo.jpg" alt="" onerror="this.remove()"><div class="g"><h1>Rekod Tugasan PPM</h1><div class="sub">${esc(P.sekolah)}</div></div>
- <div class="sub" style="text-align:right">${esc(P.nama||U.email)}<br>${esc(P.kelas)}<br><a href="#" data-a="pf">Profil</a> · <a href="#" data-a="out">Log keluar</a></div></header>
- <nav>${TABS.map(([k,l])=>`<button data-t="${k}" class="${tab===k?"on":""}">${l}</button>`).join("")}</nav><main id="v"></main>`;
+ <div class="sub" style="text-align:right">${esc(P.nama||U.email)}<br><a href="#" data-a="pf">Profil</a> · <a href="#" data-a="out">Log keluar</a></div></header>
+ <nav>${TABS.map(([k,l])=>`<button data-t="${k}" class="${tab===k?"on":""}">${l}</button>`).join("")}</nav>${P.profileSet===1?"":`<div class="card" style="background:var(--warnbg);color:var(--warn);border-color:var(--warn)"><b>Profil belum dilengkapkan.</b> Sila isi nama PPM dan nama sekolah supaya dipaparkan pada laporan PDF. <button class="btn" data-a="pf" style="margin-left:6px">Lengkapkan profil</button></div>`}<main id="v"></main>`;
  ({dash,form,tasks,rep})[tab]();
  $("#app").onclick=async e=>{const t=e.target.dataset.t,a=e.target.dataset.a,o=e.target.dataset.open;
   if(t){tab=t;draft=null;draw()}if(o){cur=o;draft=null;tab="form";draw()}if(a)e.preventDefault();
   if(a==="out")signOut(auth);
-  if(a==="pf"){const n=prompt("Nama PPM:",P.nama);if(n===null)return;const k=prompt("Kelas:",P.kelas);const s=prompt("Nama sekolah:",P.sekolah);await setDoc(ud(),{nama:n,kelas:k??P.kelas,sekolah:s||P.sekolah},{merge:true})}
+  if(a==="pf"){const n=prompt("Nama PPM:",P.nama);if(n===null)return;const s=prompt("Nama sekolah:",P.sekolah);await setDoc(ud(),{nama:n,sekolah:s||P.sekolah,profileSet:1},{merge:true})}
   if(V.click)V.click(e)}}
 let V={};
 const row=d=>{const p=prog(R[d]);return `<div class="li"><div style="flex:1"><b>${fmt(d)}</b> <span class="tag ${p<100?"w":""}">${p}%</span><div class="bar" style="margin-top:6px"><i style="width:${p}%"></i></div></div><button class="btn g" data-open="${d}">Buka</button></div>`};
@@ -53,14 +53,14 @@ function dash(){V={};const ds=Object.keys(R).sort().reverse(),m=today().slice(0,
  <div class="card"><h2>Kemajuan harian</h2>${ds.slice(0,10).map(row).join("")||'<p class="sub">Belum ada rekod.</p>'}<button class="btn" data-open="${today()}">Isi rekod hari ini</button></div>`}
 
 // ---------- Borang ----------
-function form(){draft=draft||structuredClone(R[cur]||{items:{},tiba:"",pulang:"",menu:"",catatan:"",ulasan:"",guru:""});const r=draft;
+function form(){draft=draft||structuredClone(R[cur]||{items:{},tiba:"",pulang:"",catatan:"",ulasan:"",guru:""});const r=draft;
  $("#v").innerHTML=`<div class="card"><h2>Borang Tugasan Harian</h2><div class="row"><div><label>Tarikh</label><input type="date" id="dt" value="${cur}"></div><div><label>Masa tiba</label><input type="time" id="tb" value="${r.tiba}"></div><div><label>Masa pulang</label><input type="time" id="pl" value="${r.pulang}"></div></div>
- <label>Menu</label><input id="mn" value="${esc(r.menu)}">
+
  <div id="ck">${Object.entries(groups()).map(([s,l])=>`<div class="sec">${esc(s)}</div>`+l.map(t=>`<div class="item"><span style="flex:1;min-width:200px">${esc(t.label)}</span><div class="seg" data-k="${t.id}"><button data-v="s">Selesai</button><button data-v="n">Tidak berkenaan</button></div></div>`).join("")).join("")||'<p class="sub">Tambah tugasan di tab Senarai Tugasan.</p>'}</div>
  <label>Catatan PPM</label><textarea id="ct" rows="3">${esc(r.catatan)}</textarea><label>Ulasan guru</label><textarea id="ul" rows="2">${esc(r.ulasan)}</textarea><label>Nama guru (pengesahan)</label><input id="gr" value="${esc(r.guru)}">
  <p><span class="tag" id="pg"></span></p><button class="btn" id="sv">Simpan</button> ${R[cur]?'<button class="btn d" id="dl">Padam</button>':""}</div>`;
  const paint=()=>{document.querySelectorAll(".seg").forEach(s=>s.querySelectorAll("button").forEach(b=>b.className=b.dataset.v===r.items[s.dataset.k]?b.dataset.v:""));$("#pg").textContent="Kemajuan: "+prog(r)+"%"};paint();
- const rd=()=>{r.tiba=$("#tb").value;r.pulang=$("#pl").value;r.menu=$("#mn").value;r.catatan=$("#ct").value;r.ulasan=$("#ul").value;r.guru=$("#gr").value};
+ const rd=()=>{r.tiba=$("#tb").value;r.pulang=$("#pl").value;r.catatan=$("#ct").value;r.ulasan=$("#ul").value;r.guru=$("#gr").value};
  V.click=async e=>{const b=e.target.closest(".seg button");if(b){const k=b.parentNode.dataset.k;r.items[k]=r.items[k]===b.dataset.v?"":b.dataset.v;paint()}
   if(e.target.id==="sv"){rd();await setDoc(doc(db,"users",U.uid,"records",cur),r);draft=null;toast("Rekod disimpan");tab="dash";draw()}
   if(e.target.id==="dl"&&confirm("Padam rekod ini?")){await deleteDoc(doc(db,"users",U.uid,"records",cur));draft=null;tab="dash";draw()}};
@@ -84,9 +84,13 @@ async function logo(){try{const b=await (await fetch("logo.jpg",{cache:"no-cache
 async function pdf(d){const r=R[d],{jsPDF}=window.jspdf,doc=new jsPDF(),L=["SELESAI","TIDAK BERKENAAN"],lg=await logo();let x=14;
  if(lg){try{doc.addImage(lg,"JPEG",14,10,24,24);x=44}catch(e){}}
  doc.setFont("helvetica","bold").setFontSize(13).text(P.sekolah.toUpperCase(),x,18).setFontSize(11).text("LAPORAN HARIAN PEMBANTU PENGURUSAN MURID (PPM)",x,25);
- doc.setFont("helvetica","normal").setFontSize(10).text(`Nama PPM: ${P.nama||"-"}     Kelas: ${P.kelas||"-"}`,14,42).text(`Tarikh: ${fmt(d)}     Tiba: ${r.tiba||"-"}     Pulang: ${r.pulang||"-"}`,14,48).text(`Menu: ${r.menu||"-"}`,14,54);
+ doc.setFont("helvetica","normal").setFontSize(10).text(`Nama PPM: ${P.nama||"-"}`,14,42).text(`Tarikh: ${fmt(d)}     Tiba: ${r.tiba||"-"}     Pulang: ${r.pulang||"-"}`,14,48);
  const body=[];let n=0;Object.entries(groups()).forEach(([s,l])=>{body.push([{content:s,colSpan:3,styles:{fillColor:[254,243,199],fontStyle:"bold"}}]);l.forEach(t=>body.push([++n,t.label,{SELESAI:"",s:"SELESAI",n:"TIDAK BERKENAAN"}[(r.items||{})[t.id]]||"-"]))});
- doc.autoTable({startY:60,head:[["No","Tugasan","Status"]],body,theme:"grid",headStyles:{fillColor:[31,36,48]},styles:{fontSize:9},columnStyles:{0:{cellWidth:12},2:{cellWidth:38}}});
- let y=doc.lastAutoTable.finalY+8;doc.text(`Kemajuan: ${prog(r)}%`,14,y).text("Catatan: "+(r.catatan||"-"),14,y+6,{maxWidth:180}).text("Ulasan guru: "+(r.ulasan||"-"),14,y+16,{maxWidth:180});
+ doc.autoTable({startY:56,head:[["No","Tugasan","Status"]],body,theme:"grid",headStyles:{fillColor:[31,36,48]},styles:{fontSize:9},columnStyles:{0:{cellWidth:12},2:{cellWidth:38}}});
+ let y=doc.lastAutoTable.finalY+8,p=prog(r);doc.text("Kemajuan:",14,y);
+ doc.setFillColor(226,221,208).roundedRect(36,y-3.5,90,4.5,2,2,"F");
+ if(p>0)doc.setFillColor(21,128,61).roundedRect(36,y-3.5,Math.max(4,90*p/100),4.5,2,2,"F");
+ doc.setFont("helvetica","bold").text(p+"%",130,y).setFont("helvetica","normal");
+ y+=4;doc.text("Catatan: "+(r.catatan||"-"),14,y+6,{maxWidth:180}).text("Ulasan guru: "+(r.ulasan||"-"),14,y+16,{maxWidth:180});
  doc.text("Disahkan oleh: "+(r.guru||"______________________"),14,y+32).text("Tandatangan: ______________________",120,y+32);
  doc.save(`laporan-ppm-${d}.pdf`)}

@@ -17,4 +17,6 @@
 ## 3. Logo sekolah
 Letakkan `logo.jpg` di root repo (sebelah `index.html`). Ia akan keluar di header dan di PDF.
 
+Medan `profileSet` pada dokumen `users/{uid}`: 0 = profil belum dilengkapkan (pengguna baharu), 1 = sudah. Pengguna lama ditetapkan automatik (1 jika nama sudah diisi).
+
 Setiap pengguna hanya boleh membaca/menulis data di bawah `users/{uid}` miliknya sendiri.
